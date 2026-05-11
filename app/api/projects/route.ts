@@ -1,60 +1,62 @@
+import { getCurrentUser } from "@/lib/auth/current-user";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { createProjectSchema } from "@/lib/validation/project";
 
-export async function GET() {
+export async function GET(){
     try{
+        const currentUser = await getCurrentUser();
+
         const projects = await prisma.project.findMany({
-            orderBy: {
-                createdAt: "desc",
-            },
-        });
-        return NextResponse.json({ projects })
-    }catch(err){
-        console.error(err);
-        return NextResponse.json({
-            error: "Failed to fetch projects"
-        },
-        {status: 500});
-    }
-}
-export async function POST(req: NextRequest){
-    try{
-        const body = await req.json();
-        const parsed = createProjectSchema.safeParse(body);
-        if(!parsed.success){
-            return NextResponse.json(
-                {
-                    error: "Invalid Input",
-                    details: parsed.error.flatten()
-                },
-                {status: 500}
-            )
-        }
-        const { name, description } = parsed.data;
-        const demoUser = await prisma.user.upsert({
             where: {
-                email: "demo@example.com",
+                ownerId: currentUser.id,
             },
-            update: {},
-            create: {
-                email: "demo@example.com",
-                name: "Demo User"
+            orderBy:{
+                createdAt: "desc"
             }
         });
-        const project = await prisma.project.create({
-            data: {
-                name,
-                description,
-                ownerId: demoUser.id
-            },
-        })
-        return NextResponse.json({project}, {status: 201});
+
+        return NextResponse.json({projects});
     }catch(err){
+        // throw new Error("Unknown error occured");
         console.error(err);
+    }
+}
+
+export async function POST(req: NextRequest){
+    try{
+        const currentDbUser = await getCurrentUser();
+
+        const body = await req.json();
+
+        const parsed = createProjectSchema.safeParse(body);
+
+        if (!parsed.success) {
         return NextResponse.json(
-            {error: "Failed to create a project"},
-            {status: 500}
+            {
+            error: "Invalid input",
+            details: parsed.error.flatten(),
+            },
+            { status: 400 }
+        );
+        }
+
+        const { name, description } = parsed.data;
+
+        const project = await prisma.project.create({
+        data: {
+            name,
+            description: description || null,
+            ownerId: currentDbUser.id,
+        },
+        });
+
+        return NextResponse.json({ project }, { status: 201 });
+        }catch(err){
+        console.error(err);
+       return NextResponse.json(
+            { error: "Failed to create project" },
+            { status: 500 }
         );
     }
 }

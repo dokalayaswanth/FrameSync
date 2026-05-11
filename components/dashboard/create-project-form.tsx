@@ -33,7 +33,7 @@ export default function CreateProjectForm({
             };
             setName("");
             setDescription("");
-            
+            await onProjectCreated();
         }catch(err){
             setError("Could not create project please try again");
             console.error(err);
